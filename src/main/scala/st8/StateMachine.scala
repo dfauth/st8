@@ -2,27 +2,28 @@ package st8
 
 
 object StateMachine {
-  def create[T,U,V](str: String):Builder[T,U,V] = {
-    Builder[T,U,V]()
+  def create[T,U,V](name: String, ctx:U):StateMachineBuilder[T,U,V] = {
+    StateMachineBuilder[T,U,V](ctx)
   }
 
 }
 
-case class StateMachine[T,U,V](initial:Option[State[T,U,V]]) {
+case class StateMachine[T,U,V](initial:State[T,U,V]) {
 
-  var current: State[T,U,V] = initial.get
+  var current: State[T,U,V] = initial
 
   def currentState():State[T,U,V] = current
 
-  def trigger(e: V, ctx:U):StateMachine[T,U,V] = {
-    current.trigger(e, ctx)
+  def trigger(e: V):StateMachine[T,U,V] = {
+    current.trigger(e)
     this
   }
 }
 
-case class Builder[T,U,V]() {
+case class StateMachineBuilder[T,U,V](ctx:U) {
 
-  var initial: Option[State[T,U,V]] = Option.empty
+  var initial: State[T,U,V] = _
+  var map:Map[T,State[T,U,V]] = Map()
 
   def build():StateMachine[T,U,V] = {
     StateMachine(initial)
@@ -31,9 +32,16 @@ case class Builder[T,U,V]() {
   def state(): Any = {}
 
   def initialState(state:T):State[T,U,V] = {
-    initial = Option(State[T,U,V](state))
-    initial.get
+    initial = this.state(state)
+    initial
   }
 
-  def state(state:T):State[T,U,V] = State[T,U,V](state)
+  def state(state:T):State[T,U,V] = {
+    map.get(state).getOrElse({
+      val s = State[T,U,V](ctx, state)
+      map =  map ++ Map(state -> s)
+      s
+    })
+  }
 }
+

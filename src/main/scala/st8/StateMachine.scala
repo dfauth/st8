@@ -18,7 +18,7 @@ case class StateMachine[T,U,V](initial:State[T,U,V], states:Iterable[State[T,U,V
   def currentState():State[T,U,V] = current
 
   def trigger(e: V):StateMachine[T,U,V] = {
-    current.trigger(e)
+    current = current.trigger(e)
     this
   }
 }

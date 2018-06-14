@@ -7,7 +7,7 @@ case class State[T,U,V](ctx:U, nested:T, transitions:Iterable[Transition[T,U,V]]
     }
   }
   def trigger(e: V):State[T,U,V] = {
-    map.get(e).map(t => t.execute()).getOrElse(this)
+    map.get(e).map(t => t.execute()).get
   }
 }
 

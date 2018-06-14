@@ -21,6 +21,9 @@ class StateMachineSpec extends FlatSpec with Matchers with Logging {
     wasCalled(message) should be (true)
     wasCalled(message) = false
   }
+  def assertCallbackWasNotCalled(message:String):Unit = {
+    wasCalled.get(message).isEmpty should be (true)
+  }
 
 
   "A State" should "do something" in {
@@ -48,64 +51,24 @@ class StateMachineSpec extends FlatSpec with Matchers with Logging {
     builder.state(B).onEvent(B2).unless(predicate).goTo(D).onTransition(callback("onTransitionB2"))
     builder.state(C).onEvent(C1).unless(predicate).goTo(D).onTransition(callback("onTransitionC1"))
 
-    //
-//    builder.initial(A)
-//      .onEntry(loggingConsumer("onEntry"))
-//      .onExit(loggingConsumer("onExit"))
-//      .state(B)
-//      .onEntry(loggingConsumer("onEntry"))
-//      .onExit(loggingConsumer("onExit"))
-//      .state(C)
-//      .onEntry(loggingConsumer("onEntry"))
-//      .onExit(loggingConsumer("onExit"))
-//      .state(D)
-//      .onEntry(loggingConsumer("onEntry"))
-//      .onExit(loggingConsumer("onExit"))
-//      .from(A)
-//      .onEvent(A1)
-//      .unless(predicate())
-//      .goTo(B)
-//      .onTransition(loggingConsumer("onTransition"))
-//      .then()
-//      .from(A)
-//      .onEvent(A2)
-//      .unless(predicate())
-//      .goTo(C)
-//      .onTransition(loggingConsumer("onTransition"))
-//      .then()
-//      .from(B)
-//      .onEvent(B1)
-//      .unless(predicate())
-//      .goTo(C)
-//      .onTransition(loggingConsumer("onTransition"))
-//      .and()
-//      .from(A)
-//      .onEvent(B2)
-//      .unless(predicate())
-//      .goTo(D)
-//      .onTransition(loggingConsumer("onTransition"))
-//      .then()
-//      .from(C)
-//      .onEvent(C1)
-//      .unless(predicate())
-//      .goTo(D)
-//      .onTransition(loggingConsumer("onTransition"))
-//    ;
-//
-//    {
-//      StateMachine stateMachine = builder.build();
-//      Assert.assertEquals(stateMachine.current(), A);
-//      Assert.assertEquals(stateMachine.trigger(A1).current(), A);
-//    }
     val stateMachine = builder.build()
     stateMachine should not be (None)
     stateMachine.currentState.nested should be (A)
     stateMachine trigger(A1)
     stateMachine.currentState.nested should be (A)
+    assertCallbackWasNotCalled("onTransitionA1")
+    assertCallbackWasNotCalled("onEntryA")
+    assertCallbackWasNotCalled("onExitA")
     shouldProceed = true
     stateMachine trigger(A1)
     stateMachine.currentState.nested should be (B)
     assertCallbackWasCalledAndReset("onTransitionA1")
+    stateMachine trigger(B1)
+    stateMachine.currentState.nested should be (C)
+    assertCallbackWasCalledAndReset("onTransitionB1")
+    stateMachine trigger(C1)
+    stateMachine.currentState.nested should be (D)
+    assertCallbackWasCalledAndReset("onTransitionC1")
   }
 
   // states

@@ -3,10 +3,10 @@ package st8
 import org.apache.logging.log4j.scala.Logging
 
 object Transition {
-  def create[T,U,V](ctx:U, current:State[T,U,V]) = Builder[T,U,V](ctx, current)
+  def create[T,U,V](event:V, ctx:U, current:StateBuilder[T,U,V]) = TransitionBuilder[T,U,V](event, ctx, current)
 }
 
-case class Transition[T, U, V](pipeline: () => Option[State[T,U,V]], current:State[T,U,V], on_transition:Transition[T,U,V] => Transition[T,U,V]) {
+case class Transition[T, U, V](event:V, pipeline: () => Option[State[T,U,V]], current:State[T,U,V], on_transition:Transition[T,U,V] => Transition[T,U,V]) {
 
   def execute(): State[T,U,V] = {
     val result:Option[State[T,U,V]] = pipeline()
@@ -17,7 +17,7 @@ case class Transition[T, U, V](pipeline: () => Option[State[T,U,V]], current:Sta
   }
 }
 
-case class Builder[T, U, V](ctx:U, current:State[T,U,V]) extends Logging {
+case class TransitionBuilder[T, U, V](event:V, ctx:U, parentBuilder:StateBuilder[T,U,V]) extends Logging {
 
   var next:State[T,U,V] = _
   var on_transition:Transition[T,U,V] => Transition[T,U,V] = t => {
@@ -25,13 +25,14 @@ case class Builder[T, U, V](ctx:U, current:State[T,U,V]) extends Logging {
     t
   }
   var guard:U => State[T,U,V] => Boolean = _
-  var pipeline:Option[State[T,U,V]] = Option[State[T,U,V]](current)
 
   def build(): Transition[T,U,V] = {
-    Transition[T,U,V](() =>pipeline.filter(guard(ctx)).map(_ => next), current, on_transition)
+    val current = parentBuilder.state()
+    var pipeline:Option[State[T,U,V]] = Option[State[T,U,V]](current)
+    Transition[T,U,V](event, () =>pipeline.filter(guard(ctx)).map(_ => next), current, on_transition)
   }
 
-  def onTransition(f: Transition[T,U,V] => Unit):Builder[T,U,V] = {
+  def onTransition(f: Transition[T,U,V] => Unit):TransitionBuilder[T,U,V] = {
     this.on_transition = t=>{
       logger.info("here: "+t)
       f(t);
@@ -40,12 +41,12 @@ case class Builder[T, U, V](ctx:U, current:State[T,U,V]) extends Logging {
     this
   }
 
-  def goTo(state:T):Builder[T,U,V] = {
-    next = State[T,U,V](ctx, state)
+  def goTo(t:T):TransitionBuilder[T,U,V] = {
+    next = parentBuilder.state(t)
     this
   }
 
-  def unless(p: U => State[T,U,V] => Boolean):Builder[T,U,V] = {
+  def unless(p: U => State[T,U,V] => Boolean):TransitionBuilder[T,U,V] = {
     guard = p
     this
   }

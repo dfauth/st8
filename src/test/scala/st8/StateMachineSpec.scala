@@ -1,15 +1,16 @@
 import org.apache.logging.log4j.scala.Logging
 import org.scalatest._
-import st8.{State, StateMachine,Transition}
+import st8.{StateMachine, Transition}
 
 class StateMachineSpec extends FlatSpec with Matchers with Logging {
 
   var shouldProceed = false
   var wasCalled = scala.collection.mutable.Map[String, Boolean]()
-  def predicate(ctx:StateMachineSpec): State[MyState,StateMachineSpec,MyEvent] => Boolean = {
-    a =>
-      shouldProceed
+
+  def predicate(ctx:StateMachineSpec):MyEvent=>Boolean = {
+    event => ctx.shouldProceed
   }
+
   def callback(message: String):Transition[MyState,StateMachineSpec,MyEvent] => Unit = { t => {
     logger.info(message+" transition: "+t);
     val m = wasCalled.get(message).getOrElse({
@@ -66,14 +67,14 @@ class StateMachineSpec extends FlatSpec with Matchers with Logging {
     builder should not be (None)
 
     builder initialState A onEntry callback("onEntryA") onExit callback("onExitA")
-    builder.state(B).onEntry(callback("onEntryB")).onExit(callback("onExitB"))
-    builder.state(C).onEntry(callback("onEntryC")).onExit(callback("onExitC"))
-    builder.state(D).onEntry(callback("onEntryD")).onExit(callback("onExitD"))
-    builder.state(A).onEvent(A1).unless(predicate).goTo(B).onTransition(callback("onTransitionA1"))
-    builder.state(A).onEvent(A2).unless(predicate).goTo(C).onTransition(callback("onTransitionA2"))
-    builder.state(B).onEvent(B1).unless(predicate).goTo(C).onTransition(callback("onTransitionB1"))
-    builder.state(B).onEvent(B2).unless(predicate).goTo(D).onTransition(callback("onTransitionB2"))
-    builder.state(C).onEvent(C1).unless(predicate).goTo(D).onTransition(callback("onTransitionC1"))
+    builder state(B) onEntry(callback("onEntryB")) onExit(callback("onExitB"))
+    builder state(C) onEntry(callback("onEntryC")) onExit(callback("onExitC"))
+    builder state(D) onEntry(callback("onEntryD")) onExit(callback("onExitD"))
+    builder state(A) onEvent(A1) unless(predicate) goTo(B) onTransition(callback("onTransitionA1"))
+    builder state(A) onEvent(A2) unless(predicate) goTo(C) onTransition(callback("onTransitionA2"))
+    builder state(B) onEvent(B1) unless(predicate) goTo(C) onTransition(callback("onTransitionB1"))
+    builder state(B) onEvent(B2) unless(predicate) goTo(D) onTransition(callback("onTransitionB2"))
+    builder state(C) onEvent(C1) unless(predicate) goTo(D) onTransition(callback("onTransitionC1"))
 
     {
       val stateMachine = builder.build()

@@ -13,7 +13,7 @@ case class State[T,U,V](ctx:U,
   }
 
   def trigger(e: V):State[T,U,V] = {
-    map.get(e).map(t => t.execute()).getOrElse(this)
+    map.get(e).map(t => t.execute(e)).getOrElse(this)
   }
   def entry(t:Transition[T,U,V]):Unit = stateChangeListeners.foreach(_.onEntry(t))
   def exit(t:Transition[T,U,V]):Unit = stateChangeListeners.foreach(_.onExit(t))

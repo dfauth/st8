@@ -6,10 +6,10 @@ object Transition {
   def create[T,U,V](event:V, ctx:U, current:StateBuilder[T,U,V]) = TransitionBuilder[T,U,V](event, ctx, current)
 }
 
-case class Transition[T, U, V](event:V, pipeline: () => Option[State[T,U,V]], current:State[T,U,V], on_transition:Transition[T,U,V] => Transition[T,U,V]) {
+case class Transition[T, U, V](event:V, pipeline: V => Option[State[T,U,V]], current:State[T,U,V], on_transition:Transition[T,U,V] => Transition[T,U,V]) {
 
-  def execute(): State[T,U,V] = {
-    val result:Option[State[T,U,V]] = pipeline()
+  def execute(event:V): State[T,U,V] = {
+    val result:Option[State[T,U,V]] = pipeline(event)
     result.foreach(next => {
       current.exit(this)
       on_transition(this)
@@ -23,12 +23,13 @@ case class TransitionBuilder[T, U, V](event:V, ctx:U, parentBuilder:StateBuilder
 
   var next:State[T,U,V] = _
   var on_transition:Transition[T,U,V] => Transition[T,U,V] = t => t
-  var guard:U => State[T,U,V] => Boolean = _
+  var guards:List[V => Boolean] = List.empty[V => Boolean]
 
   def build(): Transition[T,U,V] = {
     val current = parentBuilder.state()
     var pipeline:Option[State[T,U,V]] = Option[State[T,U,V]](current)
-    Transition[T,U,V](event, () =>pipeline.filter(guard(ctx)).map(_ => next), current, on_transition)
+    val guard = guards.reduce((g1,g2)=> e => g1(e) && g2(e))
+    Transition[T,U,V](event, e =>pipeline.filter(s=>guard(e)).map(_ => next), current, on_transition)
   }
 
   def onTransition(f: Transition[T,U,V] => Unit):TransitionBuilder[T,U,V] = {
@@ -41,8 +42,8 @@ case class TransitionBuilder[T, U, V](event:V, ctx:U, parentBuilder:StateBuilder
     this
   }
 
-  def unless(p: U => State[T,U,V] => Boolean):TransitionBuilder[T,U,V] = {
-    guard = p
+  def unless(p: U => V => Boolean):TransitionBuilder[T,U,V] = {
+    guards = guards :+ p(ctx)
     this
   }
 }

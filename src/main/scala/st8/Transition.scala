@@ -28,7 +28,12 @@ case class TransitionBuilder[T, U, V](event:V, ctx:U, parentBuilder:StateBuilder
   def build(): Transition[T,U,V] = {
     val current = parentBuilder.state()
     var pipeline:Option[State[T,U,V]] = Option[State[T,U,V]](current)
-    val guard = guards.reduce((g1,g2)=> e => g1(e) && g2(e))
+    val guard:V=>Boolean = guards.foldLeft[V=>Boolean](e=>
+      true
+    ){
+      (b:V=>Boolean, g:V=>Boolean) => e:V =>
+        b(e) && g(e)
+    }
     Transition[T,U,V](event, e =>pipeline.filter(s=>guard(e)).map(_ => next), current, on_transition)
   }
 

@@ -5,10 +5,22 @@ import st8.{StateMachine, Transition}
 class StateMachineSpec extends FlatSpec with Matchers with Logging {
 
   var shouldProceed = false
+  var shouldProceed2 = false
   var wasCalled = scala.collection.mutable.Map[String, Boolean]()
 
-  def predicate(ctx:StateMachineSpec):MyEvent=>Boolean = {
-    event => ctx.shouldProceed
+  def predicate(ctx:StateMachineSpec):MyEvent => Boolean = {
+    e=>{
+      ctx.shouldProceed
+    }
+  }
+
+  def predicate2(ctx:StateMachineSpec):MyEvent => Boolean = {
+    e=>
+      ctx.shouldProceed2
+  }
+
+  def predicateF(ctx:StateMachineSpec)(f:MyEvent=>Boolean):MyEvent=>Boolean = {
+    event => f(event)
   }
 
   def callback(message: String):Transition[MyState,StateMachineSpec,MyEvent] => Unit = { t => {
@@ -70,7 +82,7 @@ class StateMachineSpec extends FlatSpec with Matchers with Logging {
     builder state(B) onEntry(callback("onEntryB")) onExit(callback("onExitB"))
     builder state(C) onEntry(callback("onEntryC")) onExit(callback("onExitC"))
     builder state(D) onEntry(callback("onEntryD")) onExit(callback("onExitD"))
-    builder state(A) onEvent(A1) unless(predicate) goTo(B) onTransition(callback("onTransitionA1"))
+    builder state(A) onEvent(A1) unless(predicate) unless(predicate2) goTo(B) onTransition(callback("onTransitionA1"))
     builder state(A) onEvent(A2) unless(predicate) goTo(C) onTransition(callback("onTransitionA2"))
     builder state(B) onEvent(B1) unless(predicate) goTo(C) onTransition(callback("onTransitionB1"))
     builder state(B) onEvent(B2) unless(predicate) goTo(D) onTransition(callback("onTransitionB2"))
@@ -85,6 +97,10 @@ class StateMachineSpec extends FlatSpec with Matchers with Logging {
       stateMachine.currentState.nested should be (A)
       assertNoCallbacksWereCalled()
       shouldProceed = true
+      stateMachine trigger(A1)
+      stateMachine.currentState.nested should be (A)
+      assertNoCallbacksWereCalled()
+      shouldProceed2 = true
       stateMachine trigger(A1)
       stateMachine.currentState.nested should be (B)
       assertOnlyTheseCallbacksWereCalledAndReset("onTransitionA1","onExitA","onEntryB")
@@ -101,6 +117,7 @@ class StateMachineSpec extends FlatSpec with Matchers with Logging {
     }
     {
       shouldProceed = false
+      shouldProceed2 = false
       val stateMachine = builder.build()
       stateMachine should not be (None)
       stateMachine.currentState.nested should be (A)

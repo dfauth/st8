@@ -99,6 +99,7 @@ class StateMachineSpec extends FlatSpec with Matchers with Logging {
       assertNoCallbacksWereCalled()
     }
     {
+      shouldProceed = false
       val stateMachine = builder.build()
       stateMachine should not be (None)
       stateMachine.currentState.nested should be (A)

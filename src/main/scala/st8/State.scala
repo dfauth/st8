@@ -43,7 +43,7 @@ case class StateBuilder[T,U,V](ctx:U, nested:T, parent:StateMachineBuilder[T,U,V
             l:List[StateChangeListener[T,U,V]] = stateChangeListeners
            ): State[T, U, V] = {
     if(t == nested) {
-      current.map ++= i.foldLeft(Map.empty[V, Transition[T,U,V]]){(m,t)=>Map(t.event->t)}
+      current.map ++= i.foldLeft(Map.empty[V, Transition[T,U,V]]){(m,t)=>m ++ Map(t.event->t)}
       current.stateChangeListeners = current.stateChangeListeners ::: l
       current
     } else {

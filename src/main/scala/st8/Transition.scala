@@ -10,8 +10,10 @@ case class Transition[T, U, V](event:V, pipeline: () => Option[State[T,U,V]], cu
 
   def execute(): State[T,U,V] = {
     val result:Option[State[T,U,V]] = pipeline()
-    result.foreach(o => {
+    result.foreach(next => {
+      current.exit(this)
       on_transition(this)
+      next.entry(this)
     })
     result.getOrElse(current)
   }
@@ -20,10 +22,7 @@ case class Transition[T, U, V](event:V, pipeline: () => Option[State[T,U,V]], cu
 case class TransitionBuilder[T, U, V](event:V, ctx:U, parentBuilder:StateBuilder[T,U,V]) extends Logging {
 
   var next:State[T,U,V] = _
-  var on_transition:Transition[T,U,V] => Transition[T,U,V] = t => {
-    logger.info("identity()")
-    t
-  }
+  var on_transition:Transition[T,U,V] => Transition[T,U,V] = t => t
   var guard:U => State[T,U,V] => Boolean = _
 
   def build(): Transition[T,U,V] = {
@@ -33,11 +32,7 @@ case class TransitionBuilder[T, U, V](event:V, ctx:U, parentBuilder:StateBuilder
   }
 
   def onTransition(f: Transition[T,U,V] => Unit):TransitionBuilder[T,U,V] = {
-    this.on_transition = t=>{
-      logger.info("here: "+t)
-      f(t);
-      t
-    }
+    this.on_transition = t=>{f(t);t}
     this
   }
 

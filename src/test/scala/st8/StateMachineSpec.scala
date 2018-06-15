@@ -18,7 +18,7 @@ class StateMachineSpec extends FlatSpec with Matchers with Logging {
     })
   }}
   def assertCallbackWasCalledAndReset(message:String):Unit = {
-    wasCalled(message) should be (true)
+    wasCalled.get(message).getOrElse(false) should be (true)
     wasCalled(message) = false
   }
   def assertCallbackWasNotCalled(message:String):Unit = {
@@ -63,12 +63,16 @@ class StateMachineSpec extends FlatSpec with Matchers with Logging {
     stateMachine trigger(A1)
     stateMachine.currentState.nested should be (B)
     assertCallbackWasCalledAndReset("onTransitionA1")
+    assertCallbackWasCalledAndReset("onExitA")
+    assertCallbackWasCalledAndReset("onEntryB")
     stateMachine trigger(B1)
     stateMachine.currentState.nested should be (C)
     assertCallbackWasCalledAndReset("onTransitionB1")
     stateMachine trigger(C1)
     stateMachine.currentState.nested should be (D)
     assertCallbackWasCalledAndReset("onTransitionC1")
+    stateMachine trigger(C1)
+    stateMachine.currentState.nested should be (D)
   }
 
   // states

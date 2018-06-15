@@ -17,12 +17,36 @@ class StateMachineSpec extends FlatSpec with Matchers with Logging {
       true
     })
   }}
-  def assertCallbackWasCalledAndReset(message:String):Unit = {
-    wasCalled.get(message).getOrElse(false) should be (true)
-    wasCalled(message) = false
+  def assertOnlyTheseCallbacksWereCalledAndReset(messages:String*):Unit = {
+    assertCallbacksWereCalledAndResetSeq(messages)
+    assertNoCallbacksWereCalled()
+  }
+  def assertCallbacksWereCalledAndReset(messages:String*):Unit = {
+    assertCallbacksWereCalledAndResetSeq(messages)
+  }
+  def assertCallbacksWereCalledAndResetSeq(messages:Seq[String]):Unit = {
+    messages.foreach(message => {
+      wasCalled.get(message).getOrElse(false) should be (true)
+      wasCalled(message) = false
+    })
   }
   def assertCallbackWasNotCalled(message:String):Unit = {
     wasCalled.get(message).isEmpty should be (true)
+  }
+
+  val f = new PartialFunction[Boolean, Boolean] {
+    def apply(b: Boolean) = {
+      b == true
+    }
+    def isDefinedAt(b: Boolean) = b == true
+  }
+
+  def assertNoCallbacksWereCalled():Unit = {
+    wasCalled.values.collectFirst[Boolean](f).isEmpty should be (true)
+  }
+
+  def resetAllCallbacks():Unit = {
+    wasCalled.clear()
   }
 
 
@@ -51,28 +75,52 @@ class StateMachineSpec extends FlatSpec with Matchers with Logging {
     builder.state(B).onEvent(B2).unless(predicate).goTo(D).onTransition(callback("onTransitionB2"))
     builder.state(C).onEvent(C1).unless(predicate).goTo(D).onTransition(callback("onTransitionC1"))
 
-    val stateMachine = builder.build()
-    stateMachine should not be (None)
-    stateMachine.currentState.nested should be (A)
-    stateMachine trigger(A1)
-    stateMachine.currentState.nested should be (A)
-    assertCallbackWasNotCalled("onTransitionA1")
-    assertCallbackWasNotCalled("onEntryA")
-    assertCallbackWasNotCalled("onExitA")
-    shouldProceed = true
-    stateMachine trigger(A1)
-    stateMachine.currentState.nested should be (B)
-    assertCallbackWasCalledAndReset("onTransitionA1")
-    assertCallbackWasCalledAndReset("onExitA")
-    assertCallbackWasCalledAndReset("onEntryB")
-    stateMachine trigger(B1)
-    stateMachine.currentState.nested should be (C)
-    assertCallbackWasCalledAndReset("onTransitionB1")
-    stateMachine trigger(C1)
-    stateMachine.currentState.nested should be (D)
-    assertCallbackWasCalledAndReset("onTransitionC1")
-    stateMachine trigger(C1)
-    stateMachine.currentState.nested should be (D)
+    {
+      val stateMachine = builder.build()
+      stateMachine should not be (None)
+      stateMachine.currentState.nested should be (A)
+      assertNoCallbacksWereCalled()
+      stateMachine trigger(A1)
+      stateMachine.currentState.nested should be (A)
+      assertNoCallbacksWereCalled()
+      shouldProceed = true
+      stateMachine trigger(A1)
+      stateMachine.currentState.nested should be (B)
+      assertOnlyTheseCallbacksWereCalledAndReset("onTransitionA1","onExitA","onEntryB")
+      stateMachine trigger(B1)
+      stateMachine.currentState.nested should be (C)
+      assertOnlyTheseCallbacksWereCalledAndReset("onTransitionB1","onExitB","onEntryC")
+      stateMachine trigger(C1)
+      stateMachine.currentState.nested should be (D)
+      assertOnlyTheseCallbacksWereCalledAndReset("onTransitionC1","onExitC","onEntryD")
+      resetAllCallbacks()
+      stateMachine trigger(C1)
+      stateMachine.currentState.nested should be (D)
+      assertNoCallbacksWereCalled()
+    }
+    {
+      val stateMachine = builder.build()
+      stateMachine should not be (None)
+      stateMachine.currentState.nested should be (A)
+      assertNoCallbacksWereCalled()
+      stateMachine trigger(A2)
+      stateMachine.currentState.nested should be (A)
+      assertNoCallbacksWereCalled()
+      shouldProceed = true
+      stateMachine trigger(A2)
+      stateMachine.currentState.nested should be (C)
+      assertOnlyTheseCallbacksWereCalledAndReset("onTransitionA2","onExitA","onEntryC")
+      stateMachine trigger(B1)
+      stateMachine.currentState.nested should be (C)
+      assertNoCallbacksWereCalled()
+      stateMachine trigger(C1)
+      stateMachine.currentState.nested should be (D)
+      assertOnlyTheseCallbacksWereCalledAndReset("onTransitionC1","onExitC","onEntryD")
+      resetAllCallbacks()
+      stateMachine trigger(B1)
+      stateMachine.currentState.nested should be (D)
+      assertNoCallbacksWereCalled()
+    }
   }
 
   // states

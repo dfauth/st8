@@ -17,3 +17,5 @@ libraryDependencies += "com.google.guava" % "guava" % "latest.release"
 
 libraryDependencies += "com.typesafe.akka" %% "akka-actor" % "2.5.13"
 libraryDependencies += "com.typesafe.akka" %% "akka-testkit" % "2.5.13" % Test
+libraryDependencies += "com.typesafe.scala-logging" %% "scala-logging" % "latest.release"
+libraryDependencies += "org.testng" % "testng" % "6.14.3" % Test

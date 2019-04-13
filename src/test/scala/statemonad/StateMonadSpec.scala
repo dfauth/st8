@@ -35,44 +35,39 @@ class StateMonadSpec extends FlatSpec with Matchers with LazyLogging {
       StateMonad(s => ((), f(s)))
   }
 
-  type Transition = MyState => Event => MyState
-  val NO_OP:Transition = s => e => s
+  type Transition = PartialFunction[(Event, MyState), MyState]
+  val NO_OP:Transition = {case (e,s) => s}
 
   // states
   sealed trait MyState {
 
-    def onEvent(e:Event):Transition = trigger(e){case _ => NO_OP}
+    def transitions:Transition = NO_OP
 
-    def trigger(e:Event)(pf:PartialFunction[Event, Transition]):Transition = {
-      if(pf.isDefinedAt(e)) {
-        pf(e)
-      } else {
-        NO_OP  // default behaviour: do nothing
-      }
-    }
   }
 
   case object A extends MyState {
-    override def onEvent(e:Event) = trigger(e) {
-      case A1 => (s:MyState) => (e:Event) => B
-      case A2 => (s:MyState) => (e:Event) => C
+    override def transitions = {
+      case (A1, A) => B
+      case (A2, A) => C
     }
   }
 
   case object B extends MyState {
-    override def onEvent(e:Event) = trigger(e) {
-      case B1 => (s:MyState) => (e:Event) => C
-      case B2 => (s:MyState) => (e:Event) => D
+    override def transitions = {
+      case (B1, B) => C
+      case (B2, B) => D
     }
   }
 
   case object C extends MyState {
-    override def onEvent(e:Event) = trigger(e) {
-      case C1 => (s:MyState) => (e:Event) => D
+    override def transitions = {
+      case (C1, C) => D
     }
   }
 
   case object D extends MyState
+
+  val allTransitions = A.transitions.orElse(B.transitions).orElse(C.transitions).orElse(D.transitions).orElse(NO_OP)
 
 
   // events
@@ -88,49 +83,9 @@ class StateMonadSpec extends FlatSpec with Matchers with LazyLogging {
   case object SE1 extends SideEffect
 
   // state container
-  sealed trait State {
-    val current:MyState
-  }
-  case object initial extends State {
-    override val current: MyState = A
-  }
+  case class State(current:MyState)
 
-//  case class TransitionBuilder[S,A](parent:StateMachineBuilder[S,A], from: S) {
-//
-//    def onEvent(e: A):TransitionBuilder[S,A] = ???
-//
-//    def goTo(to: S):StateMachineBuilder[S,A] = {
-//      parent.accept(build(from => to))
-//    }
-//
-//    def build(f: S => S):Transition[S,A] = ??? //current => current match {
-////      case s => (SE1, f(s))
-////    }
-//
-//  }
-//
-//  case class StateMachineBuilder[S,A]() {
-//    def accept(build: Transition[S,A]):StateMachineBuilder[S,A] = {
-//      this
-//    }
-//
-//    def forState(s: S):TransitionBuilder[S,A] = TransitionBuilder[S,A](this, s)
-//
-//    def build:StateMachine[S,A] = ???
-//  }
-//
-//  case class StateMachine[S,A]() {
-//    def trigger(e:Event):Transition[S,A] = ???
-//  }
-//
-//  val builder = StateMachineBuilder[MyState, MyEvent]()
-//  builder.forState(A).onEvent(A1).goTo(B).
-//    forState(A).onEvent(A2).goTo(C).
-//    forState(B).onEvent(B1).goTo(C).
-//    forState(B).onEvent(B2).goTo(D).
-//    forState(C).onEvent(C1).goTo(D)
-//
-//  val sm = builder.build
+  object Initial extends State(A)
 
   "A State" should "be able to handle this" in {
     /**
@@ -148,25 +103,65 @@ class StateMonadSpec extends FlatSpec with Matchers with LazyLogging {
         // initial state
         val sm = StateMonad.insert[State, MyState](A)
 
-        sm.eval(initial) should be (A)
+        sm.eval(Initial) should be (A)
+
+        val x:Event => MyState => MyState =  e => ms => {
+          allTransitions((e,ms))
+        }
+
+        val t:Event => MyState => StateMonad[State,MyState] = e => ms => StateMonad[State, MyState](s => {
+          val result = x(e)(s.current)
+          (result, State(result))
+        })
 
         // current state
-        val sc = StateMonad[State, MyState](c => (A, c))
-        val current = sc.eval(initial)
+        val sc = StateMonad[State, MyState](c => (c.current, c))
+        val current = sc.eval(Initial)
         current should be (A)
 
-        val transition = current.onEvent(A1)
-        logger.info(s"transition(current): ${transition(current)}")
-        logger.info(s"transition(current)(A1): ${transition(current)(A1)}")
+        {
+          val next = sm.flatMap(t(A1))
+          next.eval(Initial) should be (B)
+        }
 
-        val x:MyState => MyState = transition(_)(A1)
+        {
+          var next = sm.flatMap(t(A1))
+            next = next.flatMap(t(B1))
+          next.eval(Initial) should be (C)
+        }
 
-        val t:MyState => StateMonad[State,MyState] = ms => StateMonad[State, MyState](s => (x(sm.eval(s)), s))
-        val next = sm.flatMap(t)
-        logger.info(s"next: ${next}")
-        next.eval(initial) should be (B)
-//        sc.flatMap(transition).eval(initial)
-//        State(transition).eval(A) should be (B)
+        {
+          var next = sm.flatMap(t(A1))
+            next = next.flatMap(t(B1))
+            next = next.flatMap(t(C1))
+          next.eval(Initial) should be (D)
+        }
+
+        {
+          var next = sm.flatMap(t(A1))
+          next = next.flatMap(t(B2))
+          next.eval(Initial) should be (D)
+        }
+
+        {
+          var next = sm.flatMap(t(A2))
+          next.eval(Initial) should be (C)
+          next = next.flatMap(t(A1))  // invalid transitions have no effect
+          next.eval(Initial) should be (C)
+        }
+
+        {
+          var next = sm.flatMap(t(A2))
+            next = next.flatMap(t(C1))
+          next.eval(Initial) should be (D)
+        }
+
+        {
+          var next = sm.flatMap(t(A2))
+            next = next.flatMap(t(C1))
+            next = next.flatMap(t(A1))  // invalid transitions have no effect
+          next.eval(Initial) should be (D)
+        }
       }
   }
 }

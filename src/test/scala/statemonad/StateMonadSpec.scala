@@ -35,41 +35,6 @@ class StateMonadSpec extends FlatSpec with Matchers with LazyLogging {
       StateMonad(s => ((), f(s)))
   }
 
-  type Transition = PartialFunction[(Event, MyState), MyState]
-  val NO_OP:Transition = {case (e,s) => s}
-
-  // states
-  sealed trait MyState {
-
-    def transitions:Transition = NO_OP
-
-  }
-
-  case object A extends MyState {
-    override def transitions = {
-      case (A1, A) => B
-      case (A2, A) => C
-    }
-  }
-
-  case object B extends MyState {
-    override def transitions = {
-      case (B1, B) => C
-      case (B2, B) => D
-    }
-  }
-
-  case object C extends MyState {
-    override def transitions = {
-      case (C1, C) => D
-    }
-  }
-
-  case object D extends MyState
-
-  val allTransitions = A.transitions.orElse(B.transitions).orElse(C.transitions).orElse(D.transitions).orElse(NO_OP)
-
-
   // events
   sealed trait Event
   case object A2 extends Event
@@ -78,14 +43,32 @@ class StateMonadSpec extends FlatSpec with Matchers with LazyLogging {
   case object B2 extends Event
   case object C1 extends Event
 
+  type Transition = PartialFunction[(Event, MyState), MyState]
+  val NO_OP:Transition = {case (e,s) => s}
+
+  // states
+  sealed trait MyState
+  case object A extends MyState
+  case object B extends MyState
+  case object C extends MyState
+  case object D extends MyState
+
+  case class State(current:MyState) {
+
+    val transitions:Transition = {
+      case (A1, A) => B
+      case (A2, A) => C
+      case (B1, B) => C
+      case (B2, B) => D
+      case (C1, C) => D
+    }
+  }
+
+  object Initial extends State(A)
+
   // side effects
   sealed trait SideEffect
   case object SE1 extends SideEffect
-
-  // state container
-  case class State(current:MyState)
-
-  object Initial extends State(A)
 
   "A State" should "be able to handle this" in {
     /**
@@ -105,12 +88,8 @@ class StateMonadSpec extends FlatSpec with Matchers with LazyLogging {
 
         sm.eval(Initial) should be (A)
 
-        val x:Event => MyState => MyState =  e => ms => {
-          allTransitions((e,ms))
-        }
-
         val t:Event => MyState => StateMonad[State,MyState] = e => ms => StateMonad[State, MyState](s => {
-          val result = x(e)(s.current)
+          val result = s.transitions.orElse(NO_OP)(e,s.current)
           (result, State(result))
         })
 

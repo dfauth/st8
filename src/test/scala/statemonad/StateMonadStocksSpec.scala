@@ -170,6 +170,7 @@ object StocksApp {
     def withFilter(p:S => Boolean):StateMonad[S,A] = {
       StateMonad[S,A](f) // todo apply p(s)
     }
+
     def eval(s: S): A =
       f(s)._1
   }
@@ -204,10 +205,11 @@ object StocksApp {
     val sm:StateMonad[Stocks, (BigDecimal, Int, Int)] = for {
       originallyOwned <- getImper(from)
       revenue <- sellImper(from, originallyOwned)
-      //(unused:BigDecimal, purchased:Int) <- buyImper(to, revenue)
+//      (unused, purchased) <- buyImper(to, revenue) fails to compile
+      t <- buyImper(to, revenue)  // works, but why?
     } yield {
-      // (unused,originallyOwned, purchased)
-      (0,originallyOwned, 0)
+      (t._1,originallyOwned, t._2)
+//      (unused,originallyOwned, purchased)
     }
     sm
   }

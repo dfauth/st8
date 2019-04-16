@@ -3,6 +3,8 @@ package state
 import com.typesafe.scalalogging.LazyLogging
 import org.scalatest._
 
+import scala.annotation.tailrec
+
 class StateMonadSpec extends FlatSpec with Matchers with LazyLogging {
 
   case class StateMonad[S, A](run: S => (A, S)) {
@@ -88,7 +90,9 @@ class StateMonadSpec extends FlatSpec with Matchers with LazyLogging {
 
         sm.eval(Initial) should be (A)
 
-        val t:Event => MyState => StateMonad[State,MyState] = e => ms => StateMonad[State, MyState](s => {
+        type MonadTransition = MyState => StateMonad[State,MyState]
+
+        val t:Event => MonadTransition = e => ms => StateMonad[State, MyState](s => {
           val result = s.transitions.orElse(NO_OP)(e,s.current)
           (result, State(result))
         })
@@ -140,6 +144,43 @@ class StateMonadSpec extends FlatSpec with Matchers with LazyLogging {
             next = next.flatMap(t(C1))
             next = next.flatMap(t(A1))  // invalid transitions have no effect
           next.eval(Initial) should be (D)
+        }
+
+        {
+          val events:Seq[Event] = Seq(A2,C1,A1)
+
+          events.foldLeft(sm)((sm, e) => {
+            sm.flatMap(t(e))
+          }).eval(Initial) should be (D)
+
+
+//          val q = for {
+//            s <- sm
+//            e <- events
+//            t1 = t(e)
+//          } yield s
+//          logger.info(s"q: ${q}")
+//
+//          val r = for {
+//            e <- events
+//          } yield t(e)
+//          logger.info(s"r: ${r}")
+//
+//          @tailrec
+//          def applyTransformations(sm: StateMonad[State, MyState], transformations: Seq[MonadTransition]):StateMonad[State, MyState] =
+//            transformations match {
+//              case head :: tail => applyTransformations(sm.flatMap(head), tail)
+//              case Nil => sm
+//            }
+//
+//          val s = applyTransformations(StateMonad.insert[State, MyState](A), r)
+//          logger.info(s"s: ${s}")
+//
+//          val r0 = for {
+////            r1 <- r
+//            s <- sm
+//          } yield s
+//          logger.info(s"r0: ${r0}")
         }
       }
   }

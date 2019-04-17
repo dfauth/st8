@@ -172,7 +172,27 @@ class StateMonad2Spec extends FlatSpec with Matchers with LazyLogging {
               b <- t2
             } yield b
           }).eval(Initial) should be (D)
+        }
 
+        {
+          // restore state from event history
+          val events:Seq[Transition] = Seq[Transition](A1,B1)
+
+          val sm = events.reduce((t1, t2) => {
+            for {
+              a <- t1
+              b <- t2
+            } yield b
+          })
+          sm.eval(Initial) should be (C)
+
+          // apply a new event
+          val e:Transition = C1
+
+          (for {
+            s <- sm
+            x <- e
+          } yield x).eval(Initial) should be (D)
         }
       }
   }

@@ -35,14 +35,21 @@ class StateMonad2Spec extends FlatSpec with Matchers with LazyLogging {
       StateMonad(s => ((), f(s)))
   }
 
-  type Transition = StateMonad[State, MyState]
+  type Result = (MyState, Set[SideEffect])
+  type Transition = StateMonad[State, Result]
 
   // states
-  sealed trait MyState
-  case object A extends MyState
-  case object B extends MyState
-  case object C extends MyState
-  case object D extends MyState
+  case class MyState(
+                 onEntry:Set[SideEffect] = NONE,
+                 onExit:Set[SideEffect] = NONE
+               ) {
+
+  }
+
+  object A extends MyState
+  object B extends MyState
+  object C extends MyState(onExit = Set(C_ON_EXIT_SIDE_EFFECT))
+  object D extends MyState(Set(D_ON_ENTRY_SIDE_EFFECT))
 
   case class State(current:MyState)
 
@@ -50,38 +57,48 @@ class StateMonad2Spec extends FlatSpec with Matchers with LazyLogging {
 
   // side effects
   sealed trait SideEffect
-  case object SE1 extends SideEffect
 
-  def toStateMonad(pf: PartialFunction[MyState,MyState]):Transition = {
-    StateMonad[State, MyState](s => {
-      val b = if(pf.isDefinedAt(s.current)) {
+  case object C_ON_EXIT_SIDE_EFFECT extends SideEffect
+  case object D_ON_ENTRY_SIDE_EFFECT extends SideEffect
+  case object C_TO_D_TRANSITION_SIDE_EFFECT extends SideEffect
+
+  def toStateMonad(pf: PartialFunction[MyState,Result]):Transition = {
+    StateMonad[State, Result](s => {
+      val (b, sideEffects) = if(pf.isDefinedAt(s.current)) {
         pf(s.current)
       } else {
-        s.current
+        (s.current, NONE.toSet)
       }
-      (b, State(b))
+      ((b, sideEffects), State(b))
     })
+  }
+
+  val NONE: Set[SideEffect] = Set.empty[SideEffect]
+
+  def transition(t: (MyState, MyState), sideEffects: SideEffect*): Result = {
+    val (from, to) = t
+    (to, from.onExit ++ sideEffects ++ to.onEntry )
   }
 
   // events
   def A1: Transition = toStateMonad {
-    case A => B
+    case A => (B, NONE)
   }
 
   def A2: Transition = toStateMonad {
-    case A => C
+    case A => transition(A -> C)
   }
 
   def B1: Transition = toStateMonad {
-    case B => C
+    case B => transition(B -> C)
   }
 
   def B2: Transition = toStateMonad {
-    case B => D
+    case B => transition(B -> D)
   }
 
   def C1: Transition = toStateMonad {
-    case C => D
+    case C => transition(C -> D, C_TO_D_TRANSITION_SIDE_EFFECT)
   }
 
   "A State" should "be able to handle this" in {
@@ -110,7 +127,7 @@ class StateMonad2Spec extends FlatSpec with Matchers with LazyLogging {
           val next = for {
             next <- A1
           } yield next
-            next.eval(Initial) should be (B)
+            next.eval(Initial)._1 should be (B)
         }
 
         {
@@ -118,7 +135,7 @@ class StateMonad2Spec extends FlatSpec with Matchers with LazyLogging {
             next <- A1
             next <- B1
           } yield next
-          next.eval(Initial) should be (C)
+          next.eval(Initial)._1 should be (C)
         }
 
         {
@@ -127,7 +144,7 @@ class StateMonad2Spec extends FlatSpec with Matchers with LazyLogging {
             next <- B1
             next <- C1
           } yield next
-          next.eval(Initial) should be (D)
+          next.eval(Initial)._1 should be (D)
         }
 
         {
@@ -135,7 +152,7 @@ class StateMonad2Spec extends FlatSpec with Matchers with LazyLogging {
             next <- A1
             next <- B2
           } yield next
-          next.eval(Initial) should be (D)
+          next.eval(Initial)._1 should be (D)
         }
 
         {
@@ -143,7 +160,7 @@ class StateMonad2Spec extends FlatSpec with Matchers with LazyLogging {
             next <- A2
             next <- A1
           } yield next
-          next.eval(Initial) should be (C)
+          next.eval(Initial)._1 should be (C)
         }
 
         {
@@ -151,7 +168,7 @@ class StateMonad2Spec extends FlatSpec with Matchers with LazyLogging {
             next <- A2
             next <- C1
           } yield next
-          next.eval(Initial) should be (D)
+          next.eval(Initial)._1 should be (D)
         }
 
         {
@@ -160,7 +177,7 @@ class StateMonad2Spec extends FlatSpec with Matchers with LazyLogging {
             next <- C1
             next <- A1
           } yield next
-          next.eval(Initial) should be (D)
+          next.eval(Initial)._1 should be (D)
         }
 
         {
@@ -171,7 +188,7 @@ class StateMonad2Spec extends FlatSpec with Matchers with LazyLogging {
               a <- t1
               b <- t2
             } yield b
-          }).eval(Initial) should be (D)
+          }).eval(Initial)._1 should be (D)
         }
 
         {
@@ -184,16 +201,19 @@ class StateMonad2Spec extends FlatSpec with Matchers with LazyLogging {
               b <- t2
             } yield b
           })
-          sm.eval(Initial) should be (C)
+          sm.eval(Initial)._1 should be (C)
 
           // apply a new event
           val e:Transition = C1
 
-          (for {
+          val result = (for {
             s <- sm
             x <- e
-          } yield x).eval(Initial) should be (D)
+          } yield x).eval(Initial)
+          result._1 should be (D)
+          result._2 should be (Set(C_ON_EXIT_SIDE_EFFECT, C_TO_D_TRANSITION_SIDE_EFFECT, D_ON_ENTRY_SIDE_EFFECT))
         }
       }
   }
 }
+

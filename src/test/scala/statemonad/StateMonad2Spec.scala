@@ -1,7 +1,11 @@
 package statemonad
 
+import akka.Done
 import com.typesafe.scalalogging.LazyLogging
 import org.scalatest._
+
+import scala.concurrent.Future
+import scala.concurrent.ExecutionContext.Implicits.global
 
 class StateMonad2Spec extends FlatSpec with Matchers with LazyLogging {
 
@@ -46,7 +50,7 @@ class StateMonad2Spec extends FlatSpec with Matchers with LazyLogging {
 
   }
 
-  object A extends MyState
+  object A extends MyState(onExit = Set(A_ON_EXIT_SIDE_EFFECT))
   object B extends MyState
   object C extends MyState(onExit = Set(C_ON_EXIT_SIDE_EFFECT))
   object D extends MyState(Set(D_ON_ENTRY_SIDE_EFFECT))
@@ -58,9 +62,27 @@ class StateMonad2Spec extends FlatSpec with Matchers with LazyLogging {
   // side effects
   sealed trait SideEffect
 
-  case object C_ON_EXIT_SIDE_EFFECT extends SideEffect
-  case object D_ON_ENTRY_SIDE_EFFECT extends SideEffect
-  case object C_TO_D_TRANSITION_SIDE_EFFECT extends SideEffect
+  trait ExecutableSideEffect[C] extends SideEffect {
+
+    protected def _execute(ctx: C): Done
+
+    final def execute(ctx:C):Future[Done] = Future { _execute(ctx) }
+  }
+
+  trait NOOP[C] extends ExecutableSideEffect[C] {
+    override def _execute(ctx: C): Done = Done
+  }
+
+  case object A_ON_EXIT_SIDE_EFFECT extends SideEffect with NOOP[StateMonad2Spec]
+  case object C_ON_EXIT_SIDE_EFFECT extends NOOP[StateMonad2Spec]
+  case object D_ON_ENTRY_SIDE_EFFECT extends ExecutableSideEffect[StateMonad2Spec] {
+    override def _execute(ctx: StateMonad2Spec): Done = {
+      logger.info(s" executing ${this} side effect in context: ${ctx}")
+      Done
+    }
+  }
+  case object C_TO_D_TRANSITION_SIDE_EFFECT extends NOOP[StateMonad2Spec]
+  case object B_TO_C_TRANSITION_SIDE_EFFECT extends NOOP[StateMonad2Spec]
 
   def toStateMonad(pf: PartialFunction[MyState,Result]):Transition = {
     StateMonad[State, Result](s => {
@@ -90,7 +112,7 @@ class StateMonad2Spec extends FlatSpec with Matchers with LazyLogging {
   }
 
   def B1: Transition = toStateMonad {
-    case B => transition(B -> C)
+    case B => transition(B -> C, B_TO_C_TRANSITION_SIDE_EFFECT)
   }
 
   def B2: Transition = toStateMonad {
@@ -212,7 +234,13 @@ class StateMonad2Spec extends FlatSpec with Matchers with LazyLogging {
           } yield x).eval(Initial)
           result._1 should be (D)
           result._2 should be (Set(C_ON_EXIT_SIDE_EFFECT, C_TO_D_TRANSITION_SIDE_EFFECT, D_ON_ENTRY_SIDE_EFFECT))
+          result._2.foreach {
+            case e: ExecutableSideEffect[StateMonad2Spec] => {
+              e.execute(StateMonad2Spec.this)
+            }
+          }
         }
+        Thread.sleep(2 * 1000)
       }
   }
 }

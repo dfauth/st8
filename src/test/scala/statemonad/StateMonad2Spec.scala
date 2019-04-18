@@ -9,6 +9,9 @@ import scala.concurrent.ExecutionContext.Implicits.global
 
 class StateMonad2Spec extends FlatSpec with Matchers with LazyLogging {
 
+  def toggle: Boolean = false
+
+
   case class StateMonad[S, A](run: S => (A, S)) {
 
     def map[B](f: A => B): StateMonad[S, B] =
@@ -102,9 +105,13 @@ class StateMonad2Spec extends FlatSpec with Matchers with LazyLogging {
     (to, from.onExit ++ sideEffects ++ to.onEntry )
   }
 
+  object TEST_GUARD extends (StateMonad2Spec => Boolean) {
+    override def apply(v1: StateMonad2Spec): Boolean = v1.toggle
+  }
+
   // events
-  def A1: Transition = toStateMonad {
-    case A => (B, NONE)
+  def A1(ctx:StateMonad2Spec): Transition = toStateMonad {
+    case A if(!TEST_GUARD(ctx)) => (B, NONE)
   }
 
   def A2: Transition = toStateMonad {
@@ -147,14 +154,14 @@ class StateMonad2Spec extends FlatSpec with Matchers with LazyLogging {
 
         {
           val next = for {
-            next <- A1
+            next <- A1(StateMonad2Spec.this)
           } yield next
             next.eval(Initial)._1 should be (B)
         }
 
         {
           var next = for {
-            next <- A1
+            next <- A1(StateMonad2Spec.this)
             next <- B1
           } yield next
           next.eval(Initial)._1 should be (C)
@@ -162,7 +169,7 @@ class StateMonad2Spec extends FlatSpec with Matchers with LazyLogging {
 
         {
           var next = for {
-            next <- A1
+            next <- A1(StateMonad2Spec.this)
             next <- B1
             next <- C1
           } yield next
@@ -171,7 +178,7 @@ class StateMonad2Spec extends FlatSpec with Matchers with LazyLogging {
 
         {
           var next = for {
-            next <- A1
+            next <- A1(StateMonad2Spec.this)
             next <- B2
           } yield next
           next.eval(Initial)._1 should be (D)
@@ -180,7 +187,7 @@ class StateMonad2Spec extends FlatSpec with Matchers with LazyLogging {
         {
           var next = for {
             next <- A2
-            next <- A1
+            next <- A1(StateMonad2Spec.this)
           } yield next
           next.eval(Initial)._1 should be (C)
         }
@@ -197,13 +204,13 @@ class StateMonad2Spec extends FlatSpec with Matchers with LazyLogging {
           var next = for {
             next <- A2
             next <- C1
-            next <- A1
+            next <- A1(StateMonad2Spec.this)
           } yield next
           next.eval(Initial)._1 should be (D)
         }
 
         {
-          val events:Seq[Transition] = Seq[Transition](A2,C1,A1)
+          val events:Seq[Transition] = Seq[Transition](A2,C1,A1(StateMonad2Spec.this))
 
           events.reduce((t1, t2) => {
             for {
@@ -215,7 +222,7 @@ class StateMonad2Spec extends FlatSpec with Matchers with LazyLogging {
 
         {
           // restore state from event history
-          val events:Seq[Transition] = Seq[Transition](A1,B1)
+          val events:Seq[Transition] = Seq[Transition](A1(StateMonad2Spec.this),B1)
 
           val sm = events.reduce((t1, t2) => {
             for {
